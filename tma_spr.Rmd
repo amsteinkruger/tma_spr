@@ -1,0 +1,140 @@
+---
+title: "A Map!"
+author: "Andrew Steinkruger"
+output: html_document
+---
+
+Objective: A map!
+To Do:
+
+- Points for
++ Cities:
++  San Diego
++  Tijuana
++  San Felipe
++  Golfo de Santa Clara
++  Puerto Peñasco
++  Guaymas
++  La Paz
++ Aquaculture Facilities:
++  EOF
++  COF
+
+- Labels for
+ + Cities
+ + Aquaculture Facilities
+ 
+- Polygons for
+ + Spatial Protections
+ +  Biosphere Reserve
+ +  Vaquita Reserve
+ 
+```{r libraries}
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(sf)
+library(rgdal)
+library(rnaturalearth)
+
+```
+
+
+```{r data}
+
+# Read data from local sources.
+#  Observations.
+dat_obs = read_csv("tma_obs.csv")
+#  Interdictions.
+dat_int = read_csv("tma_int.csv")
+#  Closure.
+dat_veda = read_csv("tma_veda.csv")
+
+# Read data from cloud sources.
+#  Countries.
+count = ne_download(scale = 110, type = "countries", category = "cultural", returnclass = "sf")
+#  Coastlines.
+coast = ne_download(scale = 110, type = "coastline", category = "physical", returnclass = "sf")
+
+```
+
+Text.
+
+```{r wrangle}
+
+# Define CRS. 4485 corresponds to Mexico ITRF92.
+crs = "+init=epsg:4485"
+
+# Transform coastline data.
+count = st_transform(count, crs)
+
+# Transform coastline data.
+coast = st_transform(coast, crs)
+
+# Define area of interest in latitude and longitude.
+lonbox = c(-117, -102.5, -102.5, -117, -117)
+latbox = c(33, 33, 22.5, 22.5, 33)
+# Transform area of interest from latitude and longitude to CRS.
+box = cbind(lonbox, latbox) %>% 
+  list() %>% 
+  st_polygon() %>% 
+  st_sfc(crs = "+proj=longlat") %>% 
+  st_transform(crs = crs) %>% 
+  st_bbox
+
+# Define protected area in latitude and longitude.
+#  Quick wrangle for polygon wraparound.
+dat_veda[6,] = dat_veda[1,]
+#  Everything else.
+veda = cbind(dat_veda$y, dat_veda$x) %>% 
+  list() %>% 
+  st_polygon() %>% 
+  st_sfc(crs = "+proj=longlat") %>% 
+  st_transform(crs = crs)
+
+# Define observations in latitude and longitude.
+obs = st_as_sf(dat_obs, coords = c("long", "lat"), crs = "+proj=longlat") %>% 
+  st_transform(crs)
+
+# Define interdictions in latitude and longitude.
+int = st_as_sf(dat_int, coords = c("long", "lat"), crs = "+proj=longlat") %>% 
+  st_transform(crs)
+
+# Squish point data together for convenience.
+sel_obs = select(obs, geometry) %>% 
+  mutate("type" = "Observation")
+sel_int = select(int, geometry) %>% 
+  mutate("type" = "Interdiction")
+points = rbind(sel_obs, sel_int)
+
+```
+
+Text.
+
+```{r map}
+
+map = 
+ggplot() + 
+  geom_sf(data = veda, fill = "#04859B", color = "black") +
+  geom_sf(data = count, color = "black", fill = "#C9BF9D") + #DCD6CC
+  scale_fill_manual(values = c("#EF5645", "#7A8D39")) +
+  geom_sf(data = coast, color = "#C9BF9D") +
+  geom_sf(data = points, aes(fill = type), pch = 21, size = 2.25) +
+  coord_sf(xlim = c(box["xmin"], box["xmax"]), ylim = c(box["ymin"], box["ymax"]), datum = NA) +
+  #labs(caption = "Here's your caption.", title = "Here's your title.") +
+  theme_classic() +
+  theme(panel.background = element_rect(fill = "#003660", colour = NA)) +
+  theme(legend.position = "none")
+
+```
+
+Text.
+
+```{r output}
+
+ggsave("map.png", map, dpi = 300)
+
+```
+
+Text.
